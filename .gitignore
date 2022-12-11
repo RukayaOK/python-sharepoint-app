@@ -1,5 +1,6 @@
 # Ignoring environment variables set for local development
 *.env.local.sh
+*log.lock
 
 # Compiled Python bytecode
 *.py[cod]
