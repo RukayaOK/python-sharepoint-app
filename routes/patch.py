@@ -16,7 +16,6 @@ def move_item_to_drive(site_id: str, item_id: str, target_folder_id: str, target
 
     # login to sharepoint
     sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
-    sharepoint.spam()
 
     # get data
     moved_item = sharepoint.move_item_to_new_drive(site_id, item_id, target_folder_id, target_file_name)

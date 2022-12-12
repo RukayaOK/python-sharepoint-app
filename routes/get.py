@@ -31,7 +31,6 @@ def get_site_id_by_name(site_name: str):
 
     # login to sharepoint
     sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
-    sharepoint.spam()
 
     # get data
     site_id = sharepoint.get_site_id_by_name(site_name)
@@ -53,7 +52,6 @@ def get_drive_id_by_name(site_id: str, drive_name: str):
 
     # login to sharepoint
     sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
-    sharepoint.spam()
 
     # get data
     drive_id = sharepoint.get_drive_id_by_name(site_id, drive_name)
@@ -62,6 +60,26 @@ def get_drive_id_by_name(site_id: str, drive_name: str):
 
     return drive_id
 
+
+@get.route('/site-id/<string:site_id>/drive-id/<string:drive_id>/children')
+def list_drive_items_by_id(site_id: str, drive_id: str):
+    # request header
+    tenant_id = request.headers.get('tenant-id')
+    client_id = request.headers.get('client-id')
+    client_secret = request.headers.get('client-secret')
+
+    # check existence of headers and parameters
+    check_existence([tenant_id, client_id, client_secret, site_id, drive_id])
+
+    # login to sharepoint
+    sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
+
+    # get data
+    drive_id = sharepoint.list_drive_items_by_id(site_id, drive_id)
+    if not drive_id:
+        abort(404)
+
+    return drive_id
 
 @get.route('/site-id/<string:site_id>/drive-id/<string:drive_id>/item-name/<string:item_name>')
 def get_item_id_by_name(site_id: str, drive_id: str, item_name: str):
@@ -75,7 +93,6 @@ def get_item_id_by_name(site_id: str, drive_id: str, item_name: str):
 
     # login to sharepoint
     sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
-    sharepoint.spam()
 
     # get data
     item_id = sharepoint.get_item_id_by_name(site_id, drive_id, item_name)
@@ -97,7 +114,6 @@ def download_item_by_id(site_id: str, item_id: str):
 
     # login to sharepoint
     sharepoint = sharepoint_common.Sharepoint(tenant_id, client_id, client_secret)
-    sharepoint.spam()
 
     # get data
     download_directory = os.getenv('LOCAL_FOLDER')
