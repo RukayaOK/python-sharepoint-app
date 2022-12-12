@@ -5,13 +5,29 @@ import requests
 import os
 import cgi
 import shutil
-import logger as logger_common
-
+import common.logger as logger_common
 
 sharepoint_url = os.getenv('SHAREPOINT_URL')
 
 
-class Sharepoint:
+class Singleton (type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        else:
+            cls._instances[cls].__init__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class Sharepoint(metaclass=Singleton):
+    def __call__(self):
+        return self
+
+    def spam(self):
+        print(id(self))
+
     def __init__(self, tenant_id, client_id, client_secret):
         self.grant_type = 'client_credentials'
         self.tenant_id = tenant_id
@@ -123,7 +139,7 @@ class Sharepoint:
             logger_common.logger.error(
                 f'cannot get folder:  {drive_name}')
 
-    def get_items_id_by_name(self, site_id, drive_id, item_name):
+    def get_item_id_by_name(self, site_id, drive_id, item_name):
         access_token = self.login()
         header = {
             "Authorization": "Bearer " + access_token,
@@ -161,7 +177,7 @@ class Sharepoint:
             logger_common.logger.error(
                 f'cannot get item:  {item_name}')
 
-    def get_item_by_id(self, site_id, item_id, local_file_directory):
+    def download_item_by_id(self, site_id, item_id, local_file_directory):
         access_token = self.login()
         header = {
             "Authorization": "Bearer " + access_token,
@@ -207,7 +223,7 @@ class Sharepoint:
             logger_common.logger.error(
                 f'Could not find a file for download')
 
-    def move_item_to_folder(self, site_id, item_id, new_folder_id, new_file_name):
+    def move_item_to_new_drive(self, site_id, item_id, target_folder_id, target_file_name):
         access_token = self.login()
         header = {
             "Authorization": "Bearer " + access_token,
@@ -217,9 +233,9 @@ class Sharepoint:
 
         data = {
             'parentReference': {
-                'id': new_folder_id
+                'id': target_folder_id
             },
-            'name': new_file_name
+            'name': target_file_name
         }
 
         try:
@@ -230,14 +246,13 @@ class Sharepoint:
             # check rest request was successful
             if response.status_code in (200, 201, 204):
                 logger_common.logger.info(
-                    f'moved item: {item_id} to folder: {new_folder_id} with filename {new_file_name}. Info: {response.status_code}')
+                    f'moved item: {item_id} to folder: {target_folder_id} with filename {target_file_name}. Info: {response.status_code}')
                 return response
 
             # if rest request unsuccessful
             else:
                 logger_common.logger.error(
                     f'Could not move file. Error: {response.status_code} - {response.content}')
-
 
         # if attempt at rest request failed or above failed to return results
         except Exception as e:
@@ -319,19 +334,22 @@ if __name__ == '__main__':
 
     drive_id = a.get_drive_id_by_name(site_id, os.getenv('SHAREPOINT_FOLDER'))
 
-    file_id = a.get_items_id_by_name(site_id, drive_id, os.getenv('SHAREPOINT_FILE'))
+    file_id = a.get_item_id_by_name(site_id, drive_id, os.getenv('SHAREPOINT_FILE'))
 
-    download_file = a.get_item_by_id(site_id, file_id, os.getenv('LOCAL_FOLDER'))
+    download_file = a.download_item_by_id(site_id, file_id, os.getenv('LOCAL_FOLDER'))
 
     new_drive_id = a.get_drive_id_by_name(site_id, os.getenv('NEW_SHAREPOINT_FOLDER'))
 
-    move_item = a.move_item_to_folder(site_id, file_id, new_drive_id, os.getenv('NEW_SHAREPOINT_FILENAME'))
+    """
+    moved_item = a.move_item_to_new_drive(site_id, file_id, new_drive_id, os.getenv('NEW_SHAREPOINT_FILENAME'))
+    
     
     upload_file = a.upload_file_to_drive(site_id, drive_id, os.getenv('LOCAL_FOLDER'), os.getenv('SHAREPOINT_FILE'),
                                          os.getenv('SHAREPOINT_FILE'))
 
-    new_file_id = a.get_items_id_by_name(site_id, new_drive_id, os.getenv('NEW_SHAREPOINT_FILENAME'))
+    new_file_id = a.get_item_id_by_name(site_id, new_drive_id, os.getenv('NEW_SHAREPOINT_FILENAME'))
 
     delete_item = a.delete_item_by_id(site_id, file_id)
+    """
 
 

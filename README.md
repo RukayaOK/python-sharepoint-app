@@ -15,11 +15,10 @@ To understand this repository in detail you can follow the blog piece series: Py
     ```
     python3 -m venv /path/to/new/virtual/environment
     source activate venv
-   ```
+    ```
 
-4. Install dependencies 
-
-  ```
-  pip3 install -r requirements.txt
-  ```
+4. Install dependencies
+    ```
+    pip3 install -r requirements.txt
+    ```
 
