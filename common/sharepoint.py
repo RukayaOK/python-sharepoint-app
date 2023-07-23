@@ -1,6 +1,6 @@
 #!/usr/local/bin/python3
 from datetime import datetime
-
+import sys
 import requests
 import os
 import cgi
@@ -95,6 +95,237 @@ class Sharepoint(metaclass=Singleton):
             logger_common.logger.error(
                 f'cannot get sharepoint site:  {site_name}')
 
+    # Get name and ID of root drive
+    def get_root_drive_details(self, site_id):
+        access_token = self.login()
+        header = {
+            "Authorization": "Bearer " + access_token,
+            "Content-Type": "application/json",
+            "If-Match": '*'
+        }
+
+        try:
+            response = requests.get(
+                f"{sharepoint_url}/v1.0/sites/{site_id}/drive/root",
+                headers=header)
+            # check rest request was successful
+            if response.status_code in (200, 201, 204):
+                logger_common.logger.info(
+                    f'retrieved root drive details. Info: {response.status_code}')
+                return {
+                            "name" : response.json().get('name'),
+                            "id" : response.json().get('id')
+                    }
+
+            # if rest request unsuccessful
+            else:
+                logger_common.logger.error(
+                    f'cannot get folder: root drive. Error: {response.status_code} - {response.content}')
+
+        # if attempt at rest request failed or above failed to return results
+        except Exception as e:
+            logger_common.logger.error(e, exc_info=True)
+            logger_common.logger.error(
+                f'cannot get root drive details.')
+    
+    # Get Name and ID of Sharepoint List(s)
+    def get_list_details(self, site_id, list_name=[]): 
+        access_token = self.login()
+        header = {
+            "Authorization": "Bearer " + access_token,
+            "Content-Type": "application/json",
+            "If-Match": '*',
+            "Prefer": 'allowthrottleablequeries'
+        }
+
+        try:
+            if response.status_code in (200, 201, 204):
+                logger_common.logger.info(
+                    f'retrieved list details. Info: {response.status_code}')
+                response = requests.get(
+                f"{sharepoint_url}/v1.0/sites/{site_id}/lists",
+                headers=header)
+                
+                if len(list_name) == 0:
+                    return [ { 'name': item['name'], 'id': item['id'] } for item in response.json().get('value')]
+                else:
+                    return [ { 'name': item['name'], 'id': item['id'] } for item in response.json().get('value') if item['name'] in list_name ]
+            else:
+              logger_common.logger.error(
+                    f'cannot get list: details. Error: {response.status_code} - {response.content}')
+                
+        except Exception as e:
+            logger_common.logger.error(e, exc_info=True)
+            logger_common.logger.error(
+                f'cannot get list: details')
+    
+    # Get Parent and Child structure using IDs 
+    def get_parent_child_structure_by_ids(self, items, child_id_key, parent_id_key, *args):
+        """
+        Groups all children ids under their parent id
+        
+        :param obj:
+                    items = [
+                                {'id': 1, 'parent': None, 'some_arg': 'folder'},
+                                {'id': 2, 'parent': 1, 'some_arg': 'folder'},
+                                {'id': 3, 'parent': 2, 'some_arg': 'folder'},
+                                {'id': 4, 'parent': 3, 'some_arg': 'file'},
+                                {'id': 5, 'parent': None, 'some_arg': 'folder'},
+                                {'id': 6, 'parent': 1, 'some_arg': 'file'},
+                                {'id': 7, 'parent': 2, 'some_arg': 'folder'},
+                            ]
+        :param child_id_key: 'id'
+        :param parent_id_key: 'parent'
+        :param *args: 'some_arg' <-- the name of any extra keys to be associated with the child
+        :return map of parents mapped to list of children
+            {1: [{'id': 2, 'some_arg': 'folder'}, {'id': 6, 'some_arg': 'file'}, {'id': 3, 'some_arg': 'folder'}, {'id': 7, 'some_arg': 'folder'}, {'id': 4, 'some_arg': 'file'}], 2: [{'id': 3, 'some_arg': 'folder'}, {'id': 7, 'some_arg': 'folder'}, {'id': 4, 'some_arg': 'file'}, {'id': 4, 'some_arg': 'file'}], 3: [{'id': 4, 'some_arg': 'file'}], 4: [], 5: [], 6: [], 7: []}
+        """
+        def crawl_relatives(relatives, families):
+            if len(relatives) and len(families[relatives[0][child_id_key]]) and families[relatives[0][child_id_key]][0] != relatives[-1][child_id_key]:
+                crawl_relatives(families[relatives[0][child_id_key]], families)
+                relatives += families[relatives[0][child_id_key]]
+
+
+        families = {item[child_id_key]: [] for item in items}
+
+        for item in items:
+            if item[parent_id_key] is not None:
+                item_dict = {}
+                if args:
+                    for a in args:
+                        item_dict[child_id_key] = item[child_id_key]
+                        item_dict[a] = item[a]
+                else:
+                    item_dict[child_id_key] = item[child_id_key]
+                
+                families[item[parent_id_key]].append(item_dict)
+            
+        
+        for relatives in families.values():
+            crawl_relatives(relatives, families)
+        
+        families = {k: [dict(s) for s in set(frozenset(d.items()) for d in v)] for k, v in families.items()}
+
+        return families
+    
+    # List folder, subfolder and file details (returns items and parent-child structured items)
+    def list_drives_and_items(self, site_id, list_id, root_drive_id, folders_only=False): 
+        access_token = self.login()
+        header = {
+            "Authorization": "Bearer " + access_token,
+            "Content-Type": "application/json",
+            "If-Match": '*',
+            "Prefer": 'allowthrottleablequeries'
+        }
+
+        # filter to append
+        if folders_only:
+            uri_filter = "&$filter=fields/ContentType eq 'Folder'"
+        else:
+            uri_filter = ""
+
+        try:
+            response = requests.get(
+            f"{sharepoint_url}/v1.0/sites/{site_id}/lists/{list_id}/items?$expand=driveItem,fields{uri_filter}",
+            headers=header)
+
+            # check rest request was successful
+            if response.status_code in (200, 201, 204):
+                logger_common.logger.info(
+                    f'list subfolders and files in folder. Info: {response.status_code}')
+
+                
+                # get relevant item details
+                items = [
+                    {
+                        'name': item['driveItem']['name'],
+                        'id': item['driveItem']['id'],
+                        'parent_id': item['driveItem']['parentReference']['id'],
+                        #'parent_name': item['driveItem']['parentReference']['name'],
+                        'content_type': item.get('contentType', {}).get('name')
+                    }
+                for item in response.json().get('value')]
+                # add root drive details
+                items.append({ 'name': 'Root Drive', 'id': root_drive_id, 'parent_id': None, 'content_type': 'Folder'})      
+
+                # get parent-child item structure
+                structured_items = self.get_parent_child_structure_by_ids(items, 'id', 'parent_id', 'name', 'content_type')
+
+                return {
+                            "items": items, 
+                            "items_parent_child_ids": structured_items
+                        }
+            
+            # if rest request unsuccessful
+            else:
+                logger_common.logger.error(
+                    f'cannot get items. Error: {response.status_code} - {response.content}')
+                
+        except Exception as e:
+            logger_common.logger.error(e, exc_info=True)
+            logger_common.logger.error(
+                f'error')
+
+    # List folder and file details by path
+    def list_drive_items_by_path(self, site_id, drive_path, target_item_names=[]):
+        access_token = self.login()
+        header = {
+            "Authorization": "Bearer " + access_token,
+            "Content-Type": "application/json",
+            "If-Match": '*'
+        }
+
+        try:
+            response = requests.get(
+            f"{sharepoint_url}/v1.0/sites/{site_id}/drive/root:/{drive_path}:/children",
+            headers=header)
+            
+            # check rest request was successful
+            if response.status_code in (200, 201, 204):
+                logger_common.logger.info(
+                    f'retrieved items: Info: {response.status_code}')
+
+                items = [
+                        {
+                            'name': item['name'],
+                            'id': item['id'],
+                            'parent_id': item['parentReference']['id'],
+                            #'parent_name': item['parentReference']['name'],
+                            'content_type': 'Document' if item.get('@microsoft.graph.downloadUrl', {}) else 'Folder'
+                        }
+                    for item in response.json().get('value')]
+                
+                
+                if len(target_item_names) == 0:
+                    return items
+                else:
+                    target_items_named = []
+                    for target_item in target_item_names:
+                        # throws error if file name doesn't exist
+                        lookup = next(filter(lambda x: x['name'] == target_item, items), None)
+                        if not lookup:
+                            sys.exit(f"{target_item} does not exist")
+                            #raise ValueError(f"{target_item} does not exist")
+                            
+                        target_items_named.append(lookup)
+                    return target_items_named
+            
+            # if rest request unsuccessful
+            else:
+                logger_common.logger.error(
+                    f'Cannot get items in drive path: {drive_path}. Error: {response.status_code} - {response.content}')
+
+        except Exception as e:
+            logger_common.logger.error(e, exc_info=True)
+            logger_common.logger.error(
+                f'error')
+        
+        """
+        Note: If a collection exceeds the default page size (200 items), 
+        the @odata.nextLink property is returned in the response to indicate 
+        more items are available and provide the request URL for the next page of items.
+        """
+
     def get_drive_id_by_name(self, site_id, drive_name):
         access_token = self.login()
         header = {
@@ -132,7 +363,7 @@ class Sharepoint(metaclass=Singleton):
             logger_common.logger.error(
                 f'cannot get folder:  {drive_name}')
 
-    def list_drive_items_by_id(self, site_id, drive_id):
+    def list_drive_items_by_id(self, site_id, drive_id, target_item_names=[]):
         access_token = self.login()
         header = {
             "Authorization": "Bearer " + access_token,
@@ -141,28 +372,47 @@ class Sharepoint(metaclass=Singleton):
         }
 
         try:
-            response = requests.get(
-                f"{sharepoint_url}/v1.0/sites/{site_id}/drive/items/{drive_id}/children"
-                , headers=header)
+            response = requests.get(f"{sharepoint_url}/v1.0/sites/{site_id}/drive/items/{drive_id}/children",
+                                    headers=header)
 
             # check rest request was successful
             if response.status_code in (200, 201, 204):
                 logger_common.logger.info(
-                    f'list items in folder: {drive_id}. Info: {response.status_code}')
+                    f'retrieved items: Info: {response.status_code}')
 
-                items = [{'name': item['name'], 'id': item['id']} for item in response.json().get('value')]
-                return items
-
+                items = [
+                        {
+                            'name': item['name'],
+                            'id': item['id'],
+                            'parent_id': item['parentReference']['id'],
+                            'content_type': 'Document' if item.get('@microsoft.graph.downloadUrl', {}) else 'Folder'
+                        }
+                    for item in response.json().get('value')]
+                
+                
+                if len(target_item_names) == 0:
+                    return items
+                else:
+                    target_items_named = []
+                    for target_item in target_item_names:
+                        # throws error if file name doesn't exist
+                        lookup = next(filter(lambda x: x['name'] == target_item, items), None)
+                        if not lookup:
+                            sys.exit(f"{target_item} does not exist")
+                            #raise ValueError(f"{target_item} does not exist")
+                            
+                        target_items_named.append(lookup)
+                    return target_items_named
+            
             # if rest request unsuccessful
             else:
                 logger_common.logger.error(
-                    f'Could not list drive items in {drive_id}. Error: {response.status_code} - {response.content}')
+                    f'Cannot list items in for drive id: {drive_id}. Error: {response.status_code} - {response.content}')
 
-            # if attempt at rest request failed or above failed to return results
         except Exception as e:
             logger_common.logger.error(e, exc_info=True)
             logger_common.logger.error(
-                f'Could not list drive items in {drive_id}')
+                f'Cannot list items in for drive id: {drive_id}')
 
     def get_item_id_by_name(self, site_id, drive_id, item_name):
         access_token = self.login()
@@ -376,4 +626,48 @@ if __name__ == '__main__':
     new_file_id = sharepoint.get_item_id_by_name(site_id, new_drive_id, os.getenv('NEW_SHAREPOINT_FILENAME'))
 
     delete_item = sharepoint.delete_item_by_id(site_id, file_id)
+
+
+    # Loop through folders and subfolders
+    for sharepoint_configuration in sharepoint_configurations:
+        files_to_download = []
+        
+        # only need to do this if one get_sub_folder = True
+        folder_items = sharepoint_client.list_drives_and_items(
+            sharepoint_configuration['sharepoint_site_id']
+            , sharepoint_configuration['sharepoint_root_list_id']
+            , sharepoint_configuration['sharepoint_root_drive_id']
+            , folders_only=True
+            )
+        structured_folder_items = folder_items['items_parent_child_ids']
+
+        sharepoint_folder_configuration = sharepoint_configuration['folder_and_file_paths']
+        for folder_paths in sharepoint_folder_configuration:
+            # looks up folder items and filters if file_name set
+            print("------------")
+            print(folder_paths['folder_path'])
+            folder_items = sharepoint_client.list_drive_items_by_path(sharepoint_configuration['sharepoint_site_id'], folder_paths['folder_path'], folder_paths['file_names'])
+            files_to_download.extend(folder_items)
+            print(folder_items)
+            print("------------")
+            
+            if folder_paths['get_subfolder_files']:
+                print(f"Get subfolders: {folder_paths['get_subfolder_files']}")
+                # if folder with just folders in it then should not have a file_names filter so will have result here
+                sub_folders = structured_folder_items[folder_items[0]['parent_id']]
+                # loop through subfolders and add items to files to download
+                for sub_folder in sub_folders:
+                    print(f"Sub folder: {sub_folder}")
+                    sub_folder_items = sharepoint_client.list_drive_items_by_id(sharepoint_configuration['sharepoint_site_id'], sub_folder['id'])
+                    for sub_folder_item in sub_folder_items:
+                        if sub_folder_item['content_type'] == 'Document':
+                            print(f"Subfolder item: {sub_folder_item}")
+                            files_to_download.append(sub_folder_item)
+        
+        files_to_download = [ files for files in files_to_download if files['content_type'] == 'Document']
+
+
+    print("-----results-------")
+    print(files_to_download)
+    print("-----results-------")
     """
