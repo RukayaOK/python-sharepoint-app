@@ -627,47 +627,4 @@ if __name__ == '__main__':
 
     delete_item = sharepoint.delete_item_by_id(site_id, file_id)
 
-
-    # Loop through folders and subfolders
-    for sharepoint_configuration in sharepoint_configurations:
-        files_to_download = []
-        
-        # only need to do this if one get_sub_folder = True
-        folder_items = sharepoint_client.list_drives_and_items(
-            sharepoint_configuration['sharepoint_site_id']
-            , sharepoint_configuration['sharepoint_root_list_id']
-            , sharepoint_configuration['sharepoint_root_drive_id']
-            , folders_only=True
-            )
-        structured_folder_items = folder_items['items_parent_child_ids']
-
-        sharepoint_folder_configuration = sharepoint_configuration['folder_and_file_paths']
-        for folder_paths in sharepoint_folder_configuration:
-            # looks up folder items and filters if file_name set
-            print("------------")
-            print(folder_paths['folder_path'])
-            folder_items = sharepoint_client.list_drive_items_by_path(sharepoint_configuration['sharepoint_site_id'], folder_paths['folder_path'], folder_paths['file_names'])
-            files_to_download.extend(folder_items)
-            print(folder_items)
-            print("------------")
-            
-            if folder_paths['get_subfolder_files']:
-                print(f"Get subfolders: {folder_paths['get_subfolder_files']}")
-                # if folder with just folders in it then should not have a file_names filter so will have result here
-                sub_folders = structured_folder_items[folder_items[0]['parent_id']]
-                # loop through subfolders and add items to files to download
-                for sub_folder in sub_folders:
-                    print(f"Sub folder: {sub_folder}")
-                    sub_folder_items = sharepoint_client.list_drive_items_by_id(sharepoint_configuration['sharepoint_site_id'], sub_folder['id'])
-                    for sub_folder_item in sub_folder_items:
-                        if sub_folder_item['content_type'] == 'Document':
-                            print(f"Subfolder item: {sub_folder_item}")
-                            files_to_download.append(sub_folder_item)
-        
-        files_to_download = [ files for files in files_to_download if files['content_type'] == 'Document']
-
-
-    print("-----results-------")
-    print(files_to_download)
-    print("-----results-------")
     """
