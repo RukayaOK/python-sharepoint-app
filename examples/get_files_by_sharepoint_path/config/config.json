@@ -1,0 +1,40 @@
+{
+    "site_name": "Test Site",
+    "default_look_back_days": 100,
+    "folder_and_file_paths":
+    [
+        {
+            "folder_path": "/Three/Nested/Folders",
+            "file_names": [],
+            "look_back_days": null,
+            "get_subfolder_files": true
+        },
+        {
+            "folder_path": "/Some Folder/With",
+            "file_names": ["A File.docx", "Another File.docx"],
+            "look_back_days": 10,
+            "get_subfolder_files": false
+        },
+        {
+            "folder_path": "/Level One",
+            "file_names": [],
+            "look_back_days": 18,
+            "get_subfolder_files": false
+        },
+        {
+            "folder_path": "/",
+            "file_names": ["Existent in root.docx"],
+            "look_back_days": 8,
+            "get_subfolder_files": false
+        },
+        {
+            "folder_path": "/Test",
+            "file_names": ["One.docx", "Two.docx"],
+            "look_back_days": 10,
+            "get_subfolder_files": false
+        }
+    ]
+
+}
+
+
